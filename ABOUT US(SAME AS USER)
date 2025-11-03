@@ -1,0 +1,150 @@
+using Guna.UI2.WinForms;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Diagnostics;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace H.E.A.R.Tv2._0
+{
+    public partial class Form13 : Form
+    {
+        public Form13()
+        {
+            // Improve UI performance by reducing flicker
+            this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+            this.UpdateStyles();
+            InitializeComponent();
+        }
+
+        // Open the hospital’s Facebook page
+        private void guna2Button12_Click(object sender, EventArgs e)
+        {
+            Process.Start("https://web.facebook.com/pages/Our-Lady-of-Mercy-Hospital-Pulilan-Bulacan/334292170037268");
+        }
+
+        // Open Jacob’s Facebook profile
+        private void guna2Button6_Click(object sender, EventArgs e)
+        {
+            Process.Start("https://www.facebook.com/jacob.salonga.09");
+        }
+
+        // Open Rhian’s Facebook profile
+        private void guna2Button7_Click(object sender, EventArgs e)
+        {
+            Process.Start("https://www.facebook.com/rhiankim.b");
+        }
+
+        // Open Ryuken’s Facebook profile
+        private void guna2Button8_Click(object sender, EventArgs e)
+        {
+            Process.Start("https://www.facebook.com/ryuken.canoy.3");
+        }
+
+        // Open Hayden’s Facebook profile
+        private void guna2Button9_Click(object sender, EventArgs e)
+        {
+            Process.Start("https://www.facebook.com/haydd18");
+        }
+
+        // Open another team member’s Facebook profile
+        private void guna2Button10_Click(object sender, EventArgs e)
+        {
+            Process.Start("https://www.facebook.com/profile.php?id=100069231794012");
+        }
+
+        // Open John Rainier’s Facebook profile
+        private void guna2Button11_Click(object sender, EventArgs e)
+        {
+            Process.Start("https://www.facebook.com/johnrainierarcullo");
+        }
+
+        // Logout confirmation (redirect to login form if Yes)
+        private void guna2Button5_Click(object sender, EventArgs e)
+        {
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "WARNING";
+            dialog.Text = "Are you sure you want to exit the application?";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Warning;
+            dialog.Buttons = MessageDialogButtons.YesNo;
+            dialog.Parent = this; // Centers dialog in form
+
+            // Show dialog and check user response
+            DialogResult result = dialog.Show();
+
+            if (result == DialogResult.Yes)
+            {
+                // Go back to login form
+                Form2 logout = new Form2();
+                logout.Show();
+                this.Close();
+            }
+        }
+
+        // Exit application confirmation when label is clicked
+        private void label7_Click(object sender, EventArgs e)
+        {
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "WARNING";
+            dialog.Text = "Are you sure you want to exit the application?";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Warning;
+            dialog.Buttons = MessageDialogButtons.YesNo;
+            dialog.Parent = this;
+
+            DialogResult result = dialog.Show();
+
+            // Exit app if confirmed
+            if (result == DialogResult.Yes)
+            {
+                Application.Exit();
+            }
+        }
+
+        // Minimize the entire app (all open forms)
+        private void label8_Click(object sender, EventArgs e)
+        {
+            foreach (Form f in Application.OpenForms)
+            {
+                f.WindowState = FormWindowState.Minimized;
+            }
+        }
+
+        // Go to Admin Form
+        private void guna2Button3_Click(object sender, EventArgs e)
+        {
+            Form10 admin = new Form10();
+            admin.Show();
+            this.Close();
+        }
+
+        // Go to next form (Form4)
+        private void guna2Button2_Click(object sender, EventArgs e)
+        {
+            Form4 next = new Form4();
+            next.Show();
+            this.Close();
+        }
+
+        // Go to previous form (Form3)
+        private void guna2Button1_Click(object sender, EventArgs e)
+        {
+            Form3 next = new Form3();
+            next.Show();
+            this.Close();
+        }
+
+        // When the form loads (no function yet)
+        private void Form13_Load(object sender, EventArgs e)
+        {
+
+        }
+    }
+}
