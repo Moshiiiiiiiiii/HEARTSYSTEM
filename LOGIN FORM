@@ -1,0 +1,262 @@
+using Guna.UI2.WinForms; // For Guna UI controls and dialogs
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Data.SqlClient; // For SQL Server database connection
+using System.Drawing;
+using System.Linq;
+using System.Security.Policy;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Security.Cryptography; // For password hashing (SHA256)
+
+namespace H.E.A.R.Tv2._0
+{
+    public partial class Form2 : Form
+    {
+        private Timer phTimeTimer = new Timer(); // Timer to update Philippine time
+        private TimeZoneInfo phZone; // Holds Philippine timezone information
+
+        public Form2()
+        {
+            // Enable smoother rendering and reduce flicker
+            this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+            this.UpdateStyles();
+
+     
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(password));
+                string hash = BitConverter.ToString(bytes).Replace("-", "").ToLower();
+                Console.WriteLine(hash); // Displays the hash in console
+            }
+
+            InitializeComponent();
+
+            // Set current date in label9 (e.g., November 03, 2025)
+            if (label9 != null)
+                label9.Text = DateTime.Now.ToString("MMMM dd, yyyy");
+
+            // Detect a timezone close to the Philippines (UTC+8)
+            string[] candidateIds = new[] { "Singapore Standard Time" };
+            foreach (var id in candidateIds)
+            {
+                try
+                {
+                    phZone = TimeZoneInfo.FindSystemTimeZoneById(id);
+                    break;
+                }
+                catch { /* ignore and try next */ }
+            }
+
+            // If still not found, manually select timezone with UTC+8 offset
+            if (phZone == null)
+            {
+                phZone = TimeZoneInfo.GetSystemTimeZones().FirstOrDefault(
+                    tz => tz.BaseUtcOffset == TimeSpan.FromHours(8));
+            }
+
+            // Start timer to update the clock every second
+            phTimeTimer.Interval = 1000;
+            phTimeTimer.Tick += PhTimeTimer_Tick;
+            phTimeTimer.Start();
+        }
+
+        // Updates the clock (label11) every second
+        private void PhTimeTimer_Tick(object sender, EventArgs e)
+        {
+            DateTime phTime;
+
+            if (phZone != null)
+                phTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, phZone);
+            else
+                phTime = DateTime.UtcNow.AddHours(8); // Fallback UTC+8
+
+            // Show formatted time (e.g., 07:30:45 PM)
+            if (label11 != null)
+                label11.Text = phTime.ToString("hh:mm:ss tt");
+        }
+
+        // Position labels dynamically on form load
+        private void Form2_Load(object sender, EventArgs e)
+        {
+            label7.Location = new Point(this.ClientSize.Width - label7.Width - 10, 10);
+            label8.Location = new Point(label7.Left - label8.Width - 10, 10);
+        }
+
+        // Login button click event
+        private void guna2Button1_Click(object sender, EventArgs e)
+        {
+            string username = guna2TextBox1.Text.Trim();
+            string password = guna2TextBox2.Text.Trim();
+
+            // Check if fields are empty
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            {
+                ShowDialog("WARNING", "Please enter both username and password.", MessageDialogIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                // Connect to local SQL Server database
+                using (SqlConnection con = new SqlConnection(
+                    @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\H.E.A.R.Tv2.0\Database\Login.mdf;Integrated Security=True;Connect Timeout=30"))
+                {
+                    con.Open();
+
+                    // Retrieve user data
+                    string query = "SELECT Password, Status, Role FROM Users WHERE Username = @username";
+                    using (SqlCommand cmd = new SqlCommand(query, con))
+                    {
+                        cmd.Parameters.AddWithValue("@username", username);
+
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                string dbPassword = reader["Password"].ToString();
+                                string status = reader["Status"].ToString();
+                                string role = reader["Role"].ToString();
+
+                                // Validate password
+                                if (password == dbPassword)
+                                {
+                                    if (status == "Active")
+                                    {
+                                        ShowDialog("SUCCESS", "Login successful!", MessageDialogIcon.Information);
+
+                                        // Check user role and open respective form
+                                        if (role == "Admin")
+                                        {
+                                            ShowDialog("SUCCESS", "Logined as : Admin", MessageDialogIcon.Information);
+                                            Form3 admin = new Form3();
+                                            admin.Show();
+                                            this.Hide();
+                                        }
+                                        else if (role == "User")
+                                        {
+                                            ShowDialog("SUCCESS", "Logined as : User", MessageDialogIcon.Information);
+                                            Form12 userForm = new Form12(username); // Pass username
+                                            userForm.Show();
+                                            this.Hide();
+                                        }
+                                        else
+                                        {
+                                            ShowDialog("ERROR", "Unknown role detected.", MessageDialogIcon.Error);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // Account inactive message
+                                        ShowDialog("ACCOUNT INACTIVE",
+                                            "Your account is deactivated. Please contact the administrator.",
+                                            MessageDialogIcon.Warning);
+                                    }
+                                }
+                                else
+                                {
+                                    ShowDialog("ERROR", "Invalid username or password.", MessageDialogIcon.Error);
+                                }
+                            }
+                            else
+                            {
+                                ShowDialog("ERROR", "Username not found.", MessageDialogIcon.Error);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowDialog("ERROR", "Database error: " + ex.Message, MessageDialogIcon.Error);
+            }
+        }
+
+        // Helper method to show Guna message dialogs
+        private void ShowDialog(string caption, string message, MessageDialogIcon icon)
+        {
+            Guna2MessageDialog dialog = new Guna2MessageDialog
+            {
+                Caption = caption,
+                Text = message,
+                Style = MessageDialogStyle.Dark,
+                Icon = icon,
+                Buttons = MessageDialogButtons.OK,
+                Parent = this
+            };
+            dialog.Show();
+        }
+
+        // Exit app confirmation when clicking label7 (X button)
+        private void label7_Click(object sender, EventArgs e)
+        {
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "WARNING";
+            dialog.Text = "Are you sure you want to exit the application?";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Warning;
+            dialog.Buttons = MessageDialogButtons.YesNo;
+            dialog.Parent = this;
+
+            DialogResult result = dialog.Show();
+
+            if (result == DialogResult.Yes)
+                Application.Exit(); // Close entire app
+        }
+
+        // Minimize button action
+        private void label8_Click(object sender, EventArgs e)
+        {
+            foreach (Form f in Application.OpenForms)
+                f.WindowState = FormWindowState.Minimized;
+        }
+
+        // Opens news form
+        private void linkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            Form7 news = new Form7();
+            news.Show();
+            this.Hide();
+        }
+
+        // Hide password (show bullets)
+        private void guna2PictureBox1_Click(object sender, EventArgs e)
+        {
+            guna2PictureBox2.Show();
+            pictureBox1.Hide();
+            guna2TextBox2.UseSystemPasswordChar = true;
+        }
+
+        // Show password (reveal text)
+        private void guna2PictureBox2_Click(object sender, EventArgs e)
+        {
+            pictureBox1.Hide();
+            guna2PictureBox2.Hide();
+            guna2TextBox2.UseSystemPasswordChar = false;
+        }
+
+        // Pressing Enter triggers login
+        private void guna2TextBox2_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true; // Prevent default sound
+                guna2Button1.PerformClick(); // Perform login
+                guna2TextBox1.Clear();
+                guna2TextBox2.Clear();
+            }
+        }
+
+        // Open signup form
+        private void linkLabel2_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            Form9 signup = new Form9();
+            signup.Show();
+            this.Close();
+        }
+    }
+}
