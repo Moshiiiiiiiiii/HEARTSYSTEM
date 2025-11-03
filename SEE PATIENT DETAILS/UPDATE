@@ -1,0 +1,235 @@
+using Guna.UI2.WinForms;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Windows.Forms;
+
+namespace H.E.A.R.Tv2._0
+{
+public partial class Form6 : Form
+{
+// Database connection variables
+private SqlConnection con;
+private SqlCommand cmd;
+private readonly string cs = @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\H.E.A.R.Tv2.0\Database\Login.mdf;Integrated Security=True;Connect Timeout=30;";
+private readonly Form4 _source;
+
+```
+    public Form6()
+    {
+        InitializeComponent();
+
+        // Hide and disable controls on form load
+        guna2Button5.Hide();
+        guna2Button6.Hide();
+        label23.Hide();
+        guna2Button4.Hide();
+        guna2Button3.Hide();
+
+        // Disable all textboxes and combo boxes initially
+        guna2TextBox4.Enabled = false;
+        guna2TextBox3.Enabled = false;
+        guna2TextBox5.Enabled = false;
+        guna2TextBox2.Enabled = false;
+        guna2TextBox7.Enabled = false;
+        guna2TextBox8.Enabled = false;
+        guna2TextBox6.Enabled = false;
+        guna2TextBox1.Enabled = false;
+        guna2TextBox9.Enabled = false;
+        guna2TextBox10.Enabled = false;
+        guna2TextBox11.Enabled = false;
+        guna2TextBox12.Enabled = false;
+
+        guna2ComboBox1.Enabled = false;
+        guna2ComboBox2.Enabled = false;
+        guna2ComboBox3.Enabled = false;
+        guna2ComboBox4.Enabled = false;
+        guna2ComboBox5.Enabled = false;
+        guna2ComboBox6.Enabled = false;
+        guna2DateTimePicker1.Enabled = false;
+    }
+
+    // Constructor that accepts Form4 as source (to access selected row)
+    public Form6(Form4 source) : this()
+    {
+        _source = source;
+    }
+
+    private void Form6_Load(object sender, EventArgs e)
+    {
+        // Smooth UI performance setup
+        this.DoubleBuffered = true;
+        this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+        this.UpdateStyles();
+
+        // Get selected row from Form4 (patient record)
+        var row = _source?.selectedrow ?? Application.OpenForms.OfType<Form4>().FirstOrDefault()?.selectedrow;
+        if (row == null)
+        {
+            ClearControls();
+            return;
+        }
+
+        // Helper functions to safely get cell values
+        object GetCell(int idx)
+        {
+            if (row.Cells == null || idx < 0 || idx >= row.Cells.Count) return null;
+            var v = row.Cells[idx].Value;
+            return v == DBNull.Value ? null : v;
+        }
+        string GetText(int idx) => GetCell(idx)?.ToString() ?? string.Empty;
+
+        // Load image from database
+        var imgObj = GetCell(1);
+        pictureBox1.Image = null;
+        if (imgObj != null)
+        {
+            try
+            {
+                if (imgObj is byte[] bytes && bytes.Length > 0)
+                {
+                    using (var ms = new MemoryStream(bytes))
+                        pictureBox1.Image = Image.FromStream(ms);
+                }
+                else if (imgObj is Image img)
+                {
+                    pictureBox1.Image = new Bitmap(img);
+                }
+            }
+            catch { pictureBox1.Image = null; }
+        }
+
+        // Fill textboxes with data
+        guna2TextBox12.Text = GetText(2);
+        guna2TextBox4.Text = GetText(3);
+        guna2TextBox3.Text = GetText(4);
+        guna2TextBox5.Text = GetText(5);
+        guna2TextBox2.Text = GetText(6);
+        guna2TextBox7.Text = GetText(7);
+        guna2TextBox8.Text = GetText(8);
+        guna2TextBox6.Text = GetText(9);
+
+        // Handle date and combo values
+        var dobObj = GetCell(10);
+        if (dobObj is DateTime dtVal) SetDateSafe(dtVal);
+        else if (DateTime.TryParse(GetText(10), out DateTime dt)) SetDateSafe(dt);
+
+        SetCombo(guna2ComboBox1, GetText(11));
+        SetCombo(guna2ComboBox2, GetText(12));
+
+        // Other details
+        guna2TextBox1.Text = GetText(13);
+        guna2TextBox9.Text = GetText(14);
+        guna2TextBox10.Text = GetText(15);
+        SetCombo(guna2ComboBox3, GetText(16));
+        SetCombo(guna2ComboBox6, GetText(17));
+        SetCombo(guna2ComboBox4, GetText(18));
+        SetCombo(guna2ComboBox5, GetText(19));
+        guna2TextBox11.Text = GetText(20);
+    }
+
+    // Safely set date within valid range
+    private void SetDateSafe(DateTime value)
+    {
+        if (value < guna2DateTimePicker1.MinDate) value = guna2DateTimePicker1.MinDate;
+        if (value > guna2DateTimePicker1.MaxDate) value = guna2DateTimePicker1.MaxDate;
+        guna2DateTimePicker1.Value = value;
+    }
+
+    // Safely set combo box selected item
+    private void SetCombo(Guna2ComboBox combo, string value)
+    {
+        if (combo == null) return;
+        if (string.IsNullOrWhiteSpace(value)) { combo.SelectedIndex = -1; return; }
+        var match = combo.Items.Cast<object>().FirstOrDefault(i => string.Equals(i?.ToString(), value, StringComparison.OrdinalIgnoreCase));
+        combo.SelectedItem = match ?? (object)null;
+    }
+
+    // Clears all controls
+    private void ClearControls()
+    {
+        pictureBox1.Image = null;
+        guna2TextBox12.Text =
+        guna2TextBox4.Text =
+        guna2TextBox3.Text =
+        guna2TextBox5.Text =
+        guna2TextBox2.Text =
+        guna2TextBox7.Text =
+        guna2TextBox8.Text =
+        guna2TextBox6.Text =
+        guna2TextBox1.Text =
+        guna2TextBox9.Text =
+        guna2TextBox10.Text =
+        guna2TextBox11.Text = string.Empty;
+
+        guna2ComboBox1.SelectedIndex =
+        guna2ComboBox2.SelectedIndex =
+        guna2ComboBox3.SelectedIndex =
+        guna2ComboBox4.SelectedIndex =
+        guna2ComboBox5.SelectedIndex =
+        guna2ComboBox6.SelectedIndex = -1;
+    }
+
+    // Back button → returns to Form4
+    private void guna2Button1_Click(object sender, EventArgs e)
+    {
+        new Form4().Show();
+        this.Hide();
+    }
+
+    // Edit button → enables all controls for editing
+    private void guna2Button2_Click(object sender, EventArgs e)
+    {
+        // Enable all input fields
+        guna2TextBox12.Enabled = true;
+        guna2TextBox4.Enabled = true;
+        guna2TextBox3.Enabled = true;
+        guna2TextBox5.Enabled = true;
+        guna2TextBox2.Enabled = true;
+        guna2TextBox7.Enabled = true;
+        guna2TextBox8.Enabled = true;
+        guna2TextBox6.Enabled = true;
+        guna2TextBox1.Enabled = true;
+        guna2TextBox9.Enabled = true;
+        guna2TextBox10.Enabled = true;
+        guna2TextBox11.Enabled = true;
+
+        guna2ComboBox1.Enabled = true;
+        guna2ComboBox2.Enabled = true;
+        guna2ComboBox3.Enabled = true;
+        guna2ComboBox4.Enabled = true;
+        guna2ComboBox5.Enabled = true;
+        guna2ComboBox6.Enabled = true;
+        guna2DateTimePicker1.Enabled = true;
+
+        // Show update and cancel buttons
+        label23.Show();
+        label22.Hide();
+        guna2Button3.Show();
+        guna2Button5.Show();
+        guna2Button6.Show();
+        guna2Button4.Show();
+    }
+
+    // Update record in database
+    private void guna2Button3_Click(object sender, EventArgs e)
+    {
+        // Get selected row
+        var row = _source?.selectedrow ?? Application.OpenForms.OfType<Form4>().FirstOrDefault()?.selectedrow;
+        if (row == null)
+        {
+            MessageBox.Show("No patient selected to update.");
+            return;
+        }
+
+        // Find the ID column in DataGridView
+        string[] idNames = { "Id", "ID", "PatientId", "Patient_Id" };
+        object idValue = null;
+        string idColumn = null;
+        var dgv = row.DataGridView;
+        if (dgv != nul
+```
