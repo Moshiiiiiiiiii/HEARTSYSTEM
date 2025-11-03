@@ -1,0 +1,354 @@
+using Guna.UI2.WinForms; // For Guna2 UI controls and dialogs
+using System;
+using System.Data;
+using System.Data.SqlClient; // For SQL database connection and commands
+using System.Drawing;
+using System.Linq;
+using System.Windows.Forms;
+
+namespace H.E.A.R.Tv2._0
+{
+    public partial class Form3 : Form
+    {
+        // A timer to update the Philippine time every second
+        private Timer phTimeTimer = new Timer();
+
+        // Variable to hold the timezone information for the Philippines
+        private TimeZoneInfo phZone;
+
+        // Database connection string used throughout this form
+        private readonly string connStr =
+            @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\H.E.A.R.Tv2.0\Database\Login.mdf;Integrated Security=True;Connect Timeout=30";
+
+        // ================================================
+        // FORM CONSTRUCTOR
+        // ================================================
+        public Form3()
+        {
+            // Enable smoother animations (reduce flicker)
+            this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+            this.UpdateStyles();
+
+            // Initialize UI components
+            InitializeComponent();
+
+            // Try to identify the correct timezone for the Philippines.
+            // If not found, fallback to any timezone with UTC+8.
+            string[] candidateIds = new[] { "Asia/Manila", "Philippines Standard Time", "Singapore Standard Time", "China Standard Time" };
+            foreach (var id in candidateIds)
+            {
+                try
+                {
+                    phZone = TimeZoneInfo.FindSystemTimeZoneById(id);
+                    break;
+                }
+                catch
+                {
+                    // Ignore errors and try next
+                }
+            }
+
+            // If none matched, use any timezone that has +8 hour offset
+            if (phZone == null)
+            {
+                phZone = TimeZoneInfo.GetSystemTimeZones()
+                    .FirstOrDefault(tz => tz.BaseUtcOffset == TimeSpan.FromHours(8));
+            }
+
+            // Set up a timer to update the clock label every second
+            phTimeTimer.Interval = 1000; // 1 second
+            phTimeTimer.Tick += PhTimeTimer_Tick;
+            phTimeTimer.Start();
+
+            // Load dashboard data
+            LoadTotalPatient();
+            LoadPatientGrid();
+            LoadTotalUsers();
+        }
+
+        // ================================================
+        // LOAD PATIENT LIST INTO DATA GRID VIEW
+        // ================================================
+        private void LoadPatientGrid()
+        {
+            // Find the DataGridView control in the form
+            var gridObj = this.Controls.Find("guna2DataGridViewHistory", true).FirstOrDefault();
+            if (gridObj == null || !(gridObj is DataGridView dgv)) return;
+
+            try
+            {
+                using (var conn = new SqlConnection(connStr))
+                using (var cmd = conn.CreateCommand())
+                using (var da = new SqlDataAdapter(cmd))
+                {
+                    // SQL query to get patient data
+                    cmd.CommandText = @"
+SELECT 
+    Id,
+    Firstname,
+    Lastname,
+    middlename,
+    dob,
+    gender,
+    number,
+    email
+FROM Patient
+ORDER BY Id DESC"; // Show latest patient first
+
+                    var dt = new DataTable();
+                    conn.Open();
+                    da.Fill(dt);
+
+                    // Bind data to grid
+                    dgv.DataSource = dt;
+                    dgv.AutoGenerateColumns = true;
+                    dgv.ReadOnly = true;
+                    dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+                    dgv.MultiSelect = false;
+                    dgv.RowHeadersVisible = false;
+                    dgv.AllowUserToAddRows = false;
+                    dgv.AllowUserToDeleteRows = false;
+                    dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells;
+
+                    // Hide "Id" column if not needed
+                    if (dgv.Columns.Contains("Id"))
+                        dgv.Columns["Id"].Visible = false;
+
+                    // Assign double-click event to view patient details
+                    dgv.CellDoubleClick -= Guna2DataGridViewHistory_CellDoubleClick;
+                    dgv.CellDoubleClick += Guna2DataGridViewHistory_CellDoubleClick;
+                }
+            }
+            catch (SqlException ex)
+            {
+                MessageBox.Show($"Failed to load patients into grid: {ex.Message}", "Database Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading grid: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // ================================================
+        // ON DOUBLE CLICK ROW — SHOW PATIENT INFO
+        // ================================================
+        private void Guna2DataGridViewHistory_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0) return;
+            var dgv = sender as DataGridView;
+            if (dgv == null) return;
+
+            var row = dgv.Rows[e.RowIndex];
+            var first = row.Cells["Firstname"]?.Value?.ToString() ?? string.Empty;
+            var last = row.Cells["Lastname"]?.Value?.ToString() ?? string.Empty;
+
+            MessageBox.Show($"Selected patient: {first} {last}", "Patient Selected",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        // ================================================
+        // LOAD TOTAL PATIENT COUNT INTO LABEL
+        // ================================================
+        private void LoadTotalPatient()
+        {
+            try
+            {
+                using (var conn = new SqlConnection(connStr))
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT COUNT(*) FROM Patients";
+                    conn.Open();
+                    int total = Convert.ToInt32(cmd.ExecuteScalar());
+                    if (label5 != null)
+                        label5.Text = total.ToString();
+                }
+            }
+            catch (Exception ex)
+            {
+                if (label5 != null)
+                    label5.Text = "0";
+
+                // Show Guna message dialog on error
+                Guna2MessageDialog dialog = new Guna2MessageDialog();
+                dialog.Caption = "Database Error";
+                dialog.Text = "Failed to load total accounts: " + ex.Message;
+                dialog.Style = MessageDialogStyle.Dark;
+                dialog.Icon = MessageDialogIcon.Error;
+                dialog.Buttons = MessageDialogButtons.OK;
+                dialog.Parent = this;
+                dialog.Show();
+            }
+        }
+
+        // ================================================
+        // LOAD TOTAL USERS COUNT INTO LABEL
+        // ================================================
+        private void LoadTotalUsers()
+        {
+            try
+            {
+                using (var conn = new SqlConnection(connStr))
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT COUNT(*) FROM Users";
+                    conn.Open();
+                    int total = Convert.ToInt32(cmd.ExecuteScalar());
+                    if (label3 != null)
+                        label3.Text = total.ToString();
+                }
+            }
+            catch (Exception ex)
+            {
+                if (label5 != null)
+                    label5.Text = "0";
+
+                Guna2MessageDialog dialog = new Guna2MessageDialog();
+                dialog.Caption = "Database Error";
+                dialog.Text = "Failed to load total accounts: " + ex.Message;
+                dialog.Style = MessageDialogStyle.Dark;
+                dialog.Icon = MessageDialogIcon.Error;
+                dialog.Buttons = MessageDialogButtons.OK;
+                dialog.Parent = this;
+                dialog.Show();
+            }
+        }
+
+        // ================================================
+        // TIMER: UPDATE PHILIPPINE TIME EVERY SECOND
+        // ================================================
+        private void PhTimeTimer_Tick(object sender, EventArgs e)
+        {
+            DateTime phTime = phZone != null
+                ? TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, phZone)
+                : DateTime.UtcNow.AddHours(8);
+
+            if (label11 != null)
+                label11.Text = phTime.ToString("hh:mm:ss tt");
+        }
+
+        // ================================================
+        // FORM LOAD EVENT: POSITION SOME LABELS
+        // ================================================
+        private void Form3_Load(object sender, EventArgs e)
+        {
+            label7.Location = new Point(this.ClientSize.Width - label7.Width - 10, 10);
+            label8.Location = new Point(label7.Left - label8.Width - 10, 10);
+        }
+
+        // ================================================
+        // SIDEBAR TOGGLE BUTTON (expand/collapse)
+        // ================================================
+        private void guna2PictureBox1_Click(object sender, EventArgs e)
+        {
+            if (guna2GradientPanel1.Width == 266)
+            {
+                // Collapse sidebar
+                guna2GradientPanel1.Width = 87;
+                label2.Location = new Point(90, 14);
+                guna2Panel1.Location = new Point(141, 117);
+                guna2Panel2.Location = new Point(527, 117);
+                label11.Location = new Point(146, 76);
+            }
+            else
+            {
+                // Expand sidebar
+                guna2GradientPanel1.Width = 266;
+                label2.Location = new Point(270, 14);
+                guna2Panel1.Location = new Point(316, 138);
+                guna2Panel2.Location = new Point(654, 138);
+                label11.Location = new Point(289, 81);
+            }
+        }
+
+        // ================================================
+        // EXIT BUTTON — LOGOUT AND RETURN TO LOGIN FORM
+        // ================================================
+        private void guna2Button5_Click(object sender, EventArgs e)
+        {
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "WARNING";
+            dialog.Text = "Are you sure you want to exit the application?";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Warning;
+            dialog.Buttons = MessageDialogButtons.YesNo;
+            dialog.Parent = this;
+
+            DialogResult result = dialog.Show();
+
+            if (result == DialogResult.Yes)
+            {
+                Form2 logout = new Form2();
+                logout.Show();
+                this.Close();
+            }
+        }
+
+        // ================================================
+        // LABEL7 CLICK — LOGOUT CONFIRMATION
+        // ================================================
+        private void label7_Click(object sender, EventArgs e)
+        {
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "WARNING";
+            dialog.Text = "Are you sure you want to Logout?";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Warning;
+            dialog.Buttons = MessageDialogButtons.YesNo;
+            dialog.Parent = this;
+
+            DialogResult result = dialog.Show();
+
+            if (result == DialogResult.Yes)
+            {
+                Application.Exit();
+            }
+        }
+
+        // ================================================
+        // MINIMIZE ALL OPEN FORMS
+        // ================================================
+        private void label8_Click(object sender, EventArgs e)
+        {
+            foreach (Form f in Application.OpenForms)
+            {
+                f.WindowState = FormWindowState.Minimized;
+            }
+        }
+
+        // ================================================
+        // NAVIGATION BUTTONS
+        // ================================================
+        private void guna2Button2_Click(object sender, EventArgs e)
+        {
+            Form4 patient = new Form4();
+            patient.Show();
+            this.Hide();
+        }
+
+        private void guna2Button3_Click(object sender, EventArgs e)
+        {
+            Form10 admin = new Form10();
+            admin.Show();
+            this.Hide();
+        }
+
+        private void guna2Button4_Click(object sender, EventArgs e)
+        {
+            Form13 next = new Form13();
+            next.Show();
+            this.Close();
+        }
+
+        // ================================================
+        // ENABLE DOUBLE BUFFERING FOR PANEL PAINT
+        // ================================================
+        private void guna2GradientPanel1_Paint(object sender, PaintEventArgs e)
+        {
+            this.DoubleBuffered = true;
+            this.ResizeRedraw = true;
+        }
+    }
+}
