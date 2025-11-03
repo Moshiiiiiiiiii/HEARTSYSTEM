@@ -1,0 +1,328 @@
+using Guna.UI2.WinForms;
+using System;
+using System.Data;
+using System.Data.SqlClient;
+using System.Drawing;
+using System.Linq;
+using System.Windows.Forms;
+
+namespace H.E.A.R.Tv2._0
+{
+    public partial class Form4 : Form
+    {
+        // Database command and connection setup
+        private SqlCommand cmds;
+        private SqlConnection con = new SqlConnection();
+
+        // Timer and timezone for displaying Philippine time
+        private Timer phTimeTimer = new Timer();
+        private TimeZoneInfo phZone;
+
+        public Form4()
+        {
+            InitializeComponent();
+
+            // Enable double buffering to reduce flickering on UI
+            this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+            this.UpdateStyles();
+
+            // Timer updates the time display every second
+            phTimeTimer.Interval = 1000;
+            phTimeTimer.Tick += PhTimeTimer_Tick;
+            phTimeTimer.Start();
+
+            // Allow deletion of rows by pressing the Delete key
+            guna2DataGridView1.KeyDown += Guna2DataGridView1_KeyDown;
+        }
+
+        // Back button to return to Form3 (Home)
+        private void guna2Button1_Click(object sender, EventArgs e)
+        {
+            Form3 home = new Form3();
+            home.Show();
+            this.Hide();
+        }
+
+        // Displays current time in label11 every second
+        private void PhTimeTimer_Tick(object sender, EventArgs e)
+        {
+            DateTime phTime = (phZone != null)
+                ? TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, phZone)
+                : DateTime.UtcNow.AddHours(8);
+
+            if (label11 != null)
+                label11.Text = phTime.ToString("hh:mm:ss tt");
+        }
+
+        // Runs when the form loads
+        private void Form4_Load(object sender, EventArgs e)
+        {
+            // Position top labels dynamically
+            label7.Location = new Point(this.ClientSize.Width - label7.Width - 10, 10);
+            label8.Location = new Point(label7.Left - label8.Width - 10, 10);
+
+            // Database connection string
+            con.ConnectionString = @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\H.E.A.R.Tv2.0\Database\Login.mdf;Integrated Security=True;Connect Timeout=30;";
+
+            // Load data to the grid
+            try
+            {
+                disp_data();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load patients: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // Loads patient data from database into DataGridView
+        private void disp_data()
+        {
+            if (string.IsNullOrWhiteSpace(con.ConnectionString))
+            {
+                // Show warning if connection string is missing
+                Guna2MessageDialog dialog = new Guna2MessageDialog();
+                dialog.Caption = "Configuration Error";
+                dialog.Text = "Connection string is not set.";
+                dialog.Style = MessageDialogStyle.Dark;
+                dialog.Icon = MessageDialogIcon.Warning;
+                dialog.Buttons = MessageDialogButtons.OK;
+                dialog.Parent = this;
+                dialog.Show();
+                return;
+            }
+
+            try
+            {
+                // Query database for all patients
+                using (var conn = new SqlConnection(con.ConnectionString))
+                using (var cmd = conn.CreateCommand())
+                using (var da = new SqlDataAdapter(cmd))
+                {
+                    cmd.CommandText = "SELECT * FROM Patients";
+                    var dt = new DataTable();
+                    conn.Open();
+                    da.Fill(dt);
+
+                    // Bind data to grid
+                    guna2DataGridView1.DataSource = dt;
+
+                    // Adjust column and row appearance
+                    guna2DataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+                    guna2DataGridView1.RowTemplate.Height = 120;
+                    guna2DataGridView1.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+
+                    // Adjust columns based on type (text or image)
+                    foreach (DataGridViewColumn col in guna2DataGridView1.Columns)
+                    {
+                        if (col is DataGridViewImageColumn || col.Name.ToLower().Contains("image"))
+                        {
+                            ((DataGridViewImageColumn)col).ImageLayout = DataGridViewImageCellLayout.Zoom;
+                            col.Width = 120;
+                        }
+                        else
+                        {
+                            col.AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+                            if (col.Width < 100) col.Width = 120;
+                        }
+                    }
+
+                    // Grid appearance settings
+                    guna2DataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+                    guna2DataGridView1.MultiSelect = false;
+                    guna2DataGridView1.ReadOnly = true;
+                    guna2DataGridView1.AllowUserToAddRows = false;
+                    guna2DataGridView1.RowHeadersVisible = false;
+                }
+            }
+            catch (SqlException ex)
+            {
+                MessageBox.Show($"Database error: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // Toggle sidebar width and reposition UI components
+        private void guna2PictureBox1_Click(object sender, EventArgs e)
+        {
+            if (guna2GradientPanel1.Width == 266)
+            {
+                guna2GradientPanel1.Width = 87;
+                guna2Panel1.Location = new Point(157, 108);
+                guna2Button6.Location = new Point(157, 646);
+                guna2Button7.Location = new Point(904, 646);
+            }
+            else
+            {
+                guna2GradientPanel1.Width = 266;
+                guna2Panel1.Location = new Point(260, 108);
+                guna2Button6.Location = new Point(299, 646);
+                guna2Button7.Location = new Point(975, 646);
+            }
+        }
+
+        // Logout confirmation
+        private void guna2Button5_Click(object sender, EventArgs e)
+        {
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "WARNING";
+            dialog.Text = "Are you sure you want to Logout?";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Warning;
+            dialog.Buttons = MessageDialogButtons.YesNo;
+            dialog.Parent = this;
+            DialogResult result = dialog.Show();
+
+            if (result == DialogResult.Yes)
+            {
+                Form2 login = new Form2();
+                login.Show();
+                this.Close();
+            }
+        }
+
+        // Exit confirmation
+        private void label7_Click(object sender, EventArgs e)
+        {
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "WARNING";
+            dialog.Text = "Are you sure you want to exit the application?";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Warning;
+            dialog.Buttons = MessageDialogButtons.YesNo;
+            dialog.Parent = this;
+
+            if (dialog.Show() == DialogResult.Yes)
+                Application.Exit();
+        }
+
+        // Minimize the entire app
+        private void label8_Click(object sender, EventArgs e)
+        {
+            foreach (Form f in Application.OpenForms)
+                f.WindowState = FormWindowState.Minimized;
+        }
+
+        // Go to Add Patient form
+        private void guna2Button6_Click(object sender, EventArgs e)
+        {
+            Form5 add = new Form5();
+            add.Show();
+            this.Hide();
+        }
+
+        // Track selected row in grid
+        public new DataGridViewRow selectedrow { get; set; }
+
+        private void guna2DataGridView1_CellMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.RowIndex < 0) return;
+            selectedrow = guna2DataGridView1.Rows[e.RowIndex];
+            selectedrow.Selected = true;
+        }
+
+        // Open patient details (Form6) when double-clicked
+        private void guna2DataGridView1_CellMouseDoubleClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            DataGridViewRow selectedRow = guna2DataGridView1.Rows[e.RowIndex];
+            var next = new Form6(this);
+            this.Hide();
+            next.Show();
+        }
+
+        // Allow Delete key to remove selected patient
+        private void Guna2DataGridView1_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Delete)
+            {
+                DeleteSelectedRow();
+                e.Handled = true;
+            }
+        }
+
+        // Shared function for deleting selected row
+        private void DeleteSelectedRow()
+        {
+            try
+            {
+                if (con.State == ConnectionState.Closed) con.Open();
+                DataGridViewRow row = selectedrow ?? guna2DataGridView1.CurrentRow;
+
+                if (row == null)
+                {
+                    Guna2MessageDialog warn = new Guna2MessageDialog();
+                    warn.Caption = "Warning";
+                    warn.Text = "No row selected to delete.";
+                    warn.Style = MessageDialogStyle.Dark;
+                    warn.Icon = MessageDialogIcon.Warning;
+                    warn.Buttons = MessageDialogButtons.OK;
+                    warn.Parent = this;
+                    warn.Show();
+                    return;
+                }
+
+                // Get row details
+                var fname = row.Cells["Firstname"]?.Value?.ToString() ?? "";
+                var lname = row.Cells["Lastname"]?.Value?.ToString() ?? "";
+                var idColumn = "Id";
+                var idValue = row.Cells[idColumn]?.Value;
+
+                // Confirm deletion
+                Guna2MessageDialog confirm = new Guna2MessageDialog();
+                confirm.Caption = "Confirm Delete?";
+                confirm.Text = $"Delete record for {fname} {lname}?";
+                confirm.Style = MessageDialogStyle.Dark;
+                confirm.Icon = MessageDialogIcon.Warning;
+                confirm.Buttons = MessageDialogButtons.YesNo;
+                confirm.Parent = this;
+
+                if (confirm.Show() == DialogResult.Yes)
+                {
+                    using (var cmd = con.CreateCommand())
+                    {
+                        cmd.CommandText = $"DELETE FROM Patients WHERE [{idColumn}] = @id";
+                        cmd.Parameters.AddWithValue("@id", idValue);
+                        cmd.ExecuteNonQuery();
+                    }
+
+                    // Refresh data
+                    disp_data();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Delete failed: " + ex.Message);
+            }
+            finally
+            {
+                if (con.State == ConnectionState.Open) con.Close();
+            }
+        }
+
+        // Navigation buttons
+        private void guna2Button3_Click(object sender, EventArgs e)
+        {
+            Form10 admin = new Form10();
+            admin.Show();
+            this.Close();
+        }
+
+        private void guna2Button4_Click(object sender, EventArgs e)
+        {
+            Form13 next = new Form13();
+            next.Show();
+            this.Close();
+        }
+
+        // Prevent flicker on repaint
+        private void guna2GradientPanel1_Paint(object sender, PaintEventArgs e)
+        {
+            this.DoubleBuffered = true;
+            this.ResizeRedraw = true;
+        }
+    }
+}
