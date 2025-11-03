@@ -1,0 +1,242 @@
+using Guna.UI2.WinForms;
+using System;
+using System.Data;
+using System.Data.SqlClient;
+using System.Drawing;
+using System.IO;
+using System.Windows.Forms;
+
+namespace H.E.A.R.Tv2._0
+{
+    public partial class Form5 : Form
+    {
+        // Database connection and command
+        private SqlConnection con;
+        private SqlCommand cmd;
+
+        // Connection string to local database
+        private readonly string cs = @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\H.E.A.R.Tv2.0\Database\Login.mdf;Integrated Security=True;Connect Timeout=30;";
+
+        public Form5()
+        {
+            // Improves performance by reducing flicker
+            this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+            this.UpdateStyles();
+
+            InitializeComponent();
+        }
+
+        // Validate phone number length (must be 10 digits)
+        private void guna2TextBox8_TextChanged(object sender, EventArgs e)
+        {
+            if (guna2TextBox8.TextLength == 10)
+                errorProvider1.SetError(guna2TextBox8, "");
+            else
+                errorProvider1.SetError(guna2TextBox8, "PHONE NUMBER MUST BE 10 DIGIT");
+        }
+
+        // Allow only numbers for phone number input
+        private void guna2TextBox8_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (!char.IsNumber(e.KeyChar) && e.KeyChar != (char)Keys.Back)
+            {
+                Guna2MessageDialog dialog = new Guna2MessageDialog();
+                dialog.Caption = "Invalid";
+                dialog.Text = "Allowed Only Numbers";
+                e.Handled = true;
+            }
+        }
+
+        // Calculate BMI based on weight (kg) and height (cm)
+        private void guna2Button3_Click(object sender, EventArgs e)
+        {
+            double weight, height, bmi;
+
+            if (double.TryParse(guna2TextBox1.Text, out weight) && double.TryParse(guna2TextBox9.Text, out height))
+            {
+                height = height / 100.0; // convert cm to meters
+                if (height > 0)
+                {
+                    bmi = weight / (height * height);
+                    guna2TextBox10.Text = bmi.ToString("0.00"); // round to 2 decimal places
+                }
+                else
+                {
+                    guna2TextBox10.Text = "Invalid height";
+                }
+            }
+            else
+            {
+                guna2TextBox10.Text = "Invalid input";
+            }
+        }
+
+        // Open image file and display in PictureBox
+        private void guna2Button2_Click(object sender, EventArgs e)
+        {
+            openFileDialog1.Filter = "Select Image(*.Jpg; *.png *.Gif;)|*.Jpg; *.png *.Gif'";
+            if (openFileDialog1.ShowDialog() == DialogResult.OK)
+            {
+                pictureBox1.Image = Image.FromFile(openFileDialog1.FileName);
+            }
+        }
+
+        // Go back to patient list form
+        private void guna2Button1_Click(object sender, EventArgs e)
+        {
+            Form4 back = new Form4();
+            back.Show();
+            this.Hide();
+        }
+
+        // Allow only numbers for weight
+        private void guna2TextBox1_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (!char.IsNumber(e.KeyChar) && e.KeyChar != (char)Keys.Back)
+            {
+                ShowWarning("Allow only Numbers");
+                e.Handled = true;
+            }
+        }
+
+        // Allow only numbers for height
+        private void guna2TextBox9_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (!char.IsNumber(e.KeyChar) && e.KeyChar != (char)Keys.Back)
+            {
+                ShowWarning("Allow only Numbers");
+                e.Handled = true;
+            }
+        }
+
+        // Disable manual editing of BMI field
+        private void guna2TextBox10_TextChanged(object sender, EventArgs e)
+        {
+            guna2TextBox10.Enabled = false;
+        }
+
+        // Insert new patient record into database
+        private void guna2Button4_Click(object sender, EventArgs e)
+        {
+            // Validate all fields are filled
+            if (pictureBox1.Image == null ||
+                string.IsNullOrWhiteSpace(guna2TextBox12.Text) ||
+                string.IsNullOrWhiteSpace(guna2TextBox4.Text) ||
+                string.IsNullOrWhiteSpace(guna2TextBox3.Text) ||
+                string.IsNullOrWhiteSpace(guna2TextBox5.Text) ||
+                string.IsNullOrWhiteSpace(guna2TextBox2.Text) ||
+                string.IsNullOrWhiteSpace(guna2TextBox7.Text) ||
+                string.IsNullOrWhiteSpace(guna2TextBox8.Text) ||
+                string.IsNullOrWhiteSpace(guna2TextBox6.Text) ||
+                guna2ComboBox1.SelectedItem == null ||
+                guna2ComboBox2.SelectedItem == null ||
+                string.IsNullOrWhiteSpace(guna2TextBox1.Text) ||
+                string.IsNullOrWhiteSpace(guna2TextBox9.Text) ||
+                string.IsNullOrWhiteSpace(guna2TextBox10.Text) ||
+                guna2ComboBox3.SelectedItem == null ||
+                guna2ComboBox6.SelectedItem == null ||
+                guna2ComboBox4.SelectedItem == null ||
+                guna2ComboBox5.SelectedItem == null ||
+                string.IsNullOrWhiteSpace(guna2TextBox11.Text))
+            {
+                ShowWarning("You need to fill in all the data.");
+                return;
+            }
+
+            // Save patient data to database
+            con = new SqlConnection(cs);
+            con.Open();
+
+            string q = "Insert into Patients(Image,Age,Firstname,Lastname,middlename,grade,email,number,parent,dob,gender,blood,weight,height,bmi,asthma,pneumonia,diarrhea,highblood,others)" +
+                       "values(@d1,@d2,@d3,@d4,@d5,@d6,@d7,@d8,@d9,@d10,@d11,@d12,@d13,@d14,@d15,@d16,@d17,@d18,@d19,@d20)";
+            cmd = new SqlCommand(q, con);
+
+            // Convert image to byte array
+            MemoryStream ms = new MemoryStream();
+            pictureBox1.Image.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
+            byte[] data = ms.GetBuffer();
+            SqlParameter p = new SqlParameter("@d1", SqlDbType.Image);
+            p.Value = data;
+            cmd.Parameters.Add(p);
+
+            // Add other parameters
+            cmd.Parameters.AddWithValue("@d2", guna2TextBox12.Text);
+            cmd.Parameters.AddWithValue("@d3", guna2TextBox4.Text);
+            cmd.Parameters.AddWithValue("@d4", guna2TextBox3.Text);
+            cmd.Parameters.AddWithValue("@d5", guna2TextBox5.Text);
+            cmd.Parameters.AddWithValue("@d6", guna2TextBox2.Text);
+            cmd.Parameters.AddWithValue("@d7", guna2TextBox7.Text);
+            cmd.Parameters.AddWithValue("@d8", guna2TextBox8.Text);
+            cmd.Parameters.AddWithValue("@d9", guna2TextBox6.Text);
+            cmd.Parameters.AddWithValue("@d10", guna2DateTimePicker1.Value);
+            cmd.Parameters.AddWithValue("@d11", guna2ComboBox1.SelectedItem);
+            cmd.Parameters.AddWithValue("@d12", guna2ComboBox2.SelectedItem);
+            cmd.Parameters.AddWithValue("@d13", guna2TextBox1.Text);
+            cmd.Parameters.AddWithValue("@d14", guna2TextBox9.Text);
+            cmd.Parameters.AddWithValue("@d15", guna2TextBox10.Text);
+            cmd.Parameters.AddWithValue("@d16", guna2ComboBox3.SelectedItem);
+            cmd.Parameters.AddWithValue("@d17", guna2ComboBox6.SelectedItem);
+            cmd.Parameters.AddWithValue("@d18", guna2ComboBox4.SelectedItem);
+            cmd.Parameters.AddWithValue("@d19", guna2ComboBox5.SelectedItem);
+            cmd.Parameters.AddWithValue("@d20", guna2TextBox11.Text);
+
+            // Execute the insert command
+            cmd.ExecuteNonQuery();
+
+            // Show success message
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "Inserted";
+            dialog.Text = "Successfully Inserted";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Information;
+            dialog.Buttons = MessageDialogButtons.OK;
+            dialog.Parent = this;
+            dialog.Show();
+
+            // Return to patient list after insert
+            Form4 added = new Form4();
+            added.Show();
+            this.Close();
+        }
+
+        // Restrict numeric input for Age
+        private void guna2TextBox12_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (!char.IsNumber(e.KeyChar) && e.KeyChar != (char)Keys.Back)
+            {
+                ShowWarning("Allow only Numbers");
+                e.Handled = true;
+            }
+        }
+
+        // Allow only letters for name fields
+        private void guna2TextBox4_KeyPress(object sender, KeyPressEventArgs e) => AllowOnlyLetters(e);
+        private void guna2TextBox3_KeyPress(object sender, KeyPressEventArgs e) => AllowOnlyLetters(e);
+        private void guna2TextBox5_KeyPress(object sender, KeyPressEventArgs e) => AllowOnlyLetters(e);
+        private void guna2TextBox6_KeyPress(object sender, KeyPressEventArgs e) => AllowOnlyLetters(e);
+
+        // Helper: show warning dialog
+        private void ShowWarning(string message)
+        {
+            Guna2MessageDialog dialog1 = new Guna2MessageDialog();
+            dialog1.Caption = "Warning";
+            dialog1.Text = message;
+            dialog1.Style = MessageDialogStyle.Dark;
+            dialog1.Icon = MessageDialogIcon.Error;
+            dialog1.Buttons = MessageDialogButtons.OK;
+            dialog1.Parent = this;
+            dialog1.Show();
+        }
+
+        // Helper: allow only letters in text fields
+        private void AllowOnlyLetters(KeyPressEventArgs e)
+        {
+            if (!char.IsLetter(e.KeyChar) && !char.IsControl(e.KeyChar) && e.KeyChar != ' ')
+            {
+                e.Handled = true;
+                ShowWarning("Allow only Letters");
+            }
+        }
+    }
+}
