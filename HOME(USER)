@@ -1,0 +1,138 @@
+using Guna.UI2.WinForms;
+using System;
+using System.Data.SqlClient;
+using System.Windows.Forms;
+
+namespace H.E.A.R.Tv2._0
+{
+    public partial class Form12 : Form
+    {
+        private string currentUsername; // Stores the currently logged-in username
+
+        public Form12(string username)
+        {
+            // Enable smoother form rendering (reduces flickering)
+            this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+            this.UpdateStyles();
+
+            InitializeComponent();
+            currentUsername = username; // Save the username for later use
+        }
+
+        private void Form12_Load(object sender, EventArgs e)
+        {
+            LoadUserData(); // Load user info when the form opens
+        }
+
+        /// <summary>
+        /// Fetches the logged-in user’s info from the database and displays it on labels.
+        /// </summary>
+        private void LoadUserData()
+        {
+            try
+            {
+                using (SqlConnection con = new SqlConnection(
+                    @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\H.E.A.R.Tv2.0\Database\Login.mdf;Integrated Security=True;Connect Timeout=30;"))
+                {
+                    con.Open();
+
+                    string query = "SELECT Username, Status FROM Users WHERE Username = @username";
+                    using (SqlCommand cmd = new SqlCommand(query, con))
+                    {
+                        cmd.Parameters.AddWithValue("@username", currentUsername);
+
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                // Retrieve username and account status
+                                string username = reader["Username"].ToString();
+                                string status = reader["Status"].ToString();
+
+                                // Show user info in labels
+                                label3.Text = $"Welcome, {username}!";
+                                label4.Text = $"Account Status: {status}";
+                            }
+                            else
+                            {
+                                MessageBox.Show("User not found in database.", "ERROR", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Database Error: " + ex.Message, "ERROR", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void guna2Button2_Click(object sender, EventArgs e)
+        {
+            // Open Form11 and pass the username
+            Form11 form = new Form11(currentUsername);
+            form.Show();
+            this.Hide(); // Hide current form
+        }
+
+        private void label7_Click(object sender, EventArgs e)
+        {
+            // Confirm before exiting the app
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "WARNING";
+            dialog.Text = "Are you sure you want to exit the application?";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Warning;
+            dialog.Buttons = MessageDialogButtons.YesNo;
+            dialog.Parent = this;
+
+            DialogResult result = dialog.Show();
+
+            // Exit app if user confirms
+            if (result == DialogResult.Yes)
+            {
+                Application.Exit();
+            }
+        }
+
+        private void label8_Click(object sender, EventArgs e)
+        {
+            // Minimize all open windows (whole app minimizes)
+            foreach (Form f in Application.OpenForms)
+            {
+                f.WindowState = FormWindowState.Minimized;
+            }
+        }
+
+        private void guna2Button5_Click(object sender, EventArgs e)
+        {
+            // Confirm before logging out
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "WARNING";
+            dialog.Text = "Are you sure you want to Logout?";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Warning;
+            dialog.Buttons = MessageDialogButtons.YesNo;
+            dialog.Parent = this;
+
+            DialogResult result = dialog.Show();
+
+            // If confirmed, show login form and close current one
+            if (result == DialogResult.Yes)
+            {
+                Form2 login = new Form2();
+                login.Show();
+                this.Close();
+            }
+        }
+
+        private void guna2Button4_Click(object sender, EventArgs e)
+        {
+            // Open Form14 (next form) and close this one
+            Form14 next = new Form14(currentUsername);
+            next.Show();
+            this.Close();
+        }
+    }
+}
