@@ -1,0 +1,294 @@
+using BCrypt.Net;
+using Guna.UI2.WinForms;
+using System;
+using System.Data;
+using System.Data.SqlClient;
+using System.Drawing;
+using System.Linq;
+using System.Windows.Forms;
+
+namespace H.E.A.R.Tv2._0
+{
+public partial class Form11 : Form
+{
+// SQL objects for commands and connection
+private SqlCommand cmds;
+private SqlConnection con = new SqlConnection();
+
+```
+    // Store the username of the logged-in user
+    private string currentUsername;
+
+    // Constructor receives username of logged-in user
+    public Form11(string username)
+    {
+        // Improve UI rendering performance
+        this.DoubleBuffered = true;
+        this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+        this.UpdateStyles();
+
+        // Store current username and initialize components
+        currentUsername = username;
+        InitializeComponent();
+        LoadUserData(); // Load user info when form opens
+    }
+
+    // Load current user data from the database
+    private void LoadUserData()
+    {
+        try
+        {
+            using (SqlConnection con = new SqlConnection(
+                 @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\H.E.A.R.Tv2.0\Database\Login.mdf;Integrated Security=True;Connect Timeout=30;"))
+            {
+                con.Open();
+
+                // Query the database for username and status
+                string query = "SELECT Username, Status FROM Users WHERE Username = @username";
+                using (SqlCommand cmd = new SqlCommand(query, con))
+                {
+                    cmd.Parameters.AddWithValue("@username", currentUsername);
+
+                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            string username = reader["Username"].ToString();
+                            string status = reader["Status"].ToString();
+
+                            // You can display data here (e.g., in labels)
+                        }
+                        else
+                        {
+                            // Show warning if user not found
+                            MessageBox.Show("User not found in database.", "ERROR", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle database connection or query errors
+            MessageBox.Show("Database Error: " + ex.Message, "ERROR", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    // Event triggered when the form loads
+    private void Form11_Load(object sender, EventArgs e)
+    {
+        // Set up connection string
+        con.ConnectionString = @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\H.E.A.R.Tv2.0\Database\Login.mdf;Integrated Security=True;Connect Timeout=30;";
+
+        try
+        {
+            // Load patient data into DataGridView
+            disp_data();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to load patients: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    // Display data in DataGridView
+    private void disp_data()
+    {
+        // Check if connection string is empty
+        if (string.IsNullOrWhiteSpace(con.ConnectionString))
+        {
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "Configuration Error";
+            dialog.Text = "Connection string is not set.";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Warning;
+            dialog.Buttons = MessageDialogButtons.OK;
+            dialog.Parent = this;
+            dialog.Show();
+            return;
+        }
+
+        try
+        {
+            // Use local connection for safer database operations
+            using (var conn = new SqlConnection(con.ConnectionString))
+            using (var cmd = conn.CreateCommand())
+            using (var da = new SqlDataAdapter(cmd))
+            {
+                cmd.CommandType = CommandType.Text;
+                cmd.CommandText = "SELECT * FROM Patients";
+
+                var dt = new DataTable();
+                conn.Open();
+                da.Fill(dt);
+
+                // Bind database result to DataGridView
+                guna2DataGridView1.DataSource = dt;
+
+                // Improve grid display settings
+                guna2DataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+                guna2DataGridView1.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCellsExceptHeaders;
+                guna2DataGridView1.RowTemplate.Height = 120;
+                guna2DataGridView1.RowTemplate.MinimumHeight = 80;
+                guna2DataGridView1.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+
+                // Adjust columns (handle text and image columns separately)
+                for (int i = 0; i < guna2DataGridView1.Columns.Count; i++)
+                {
+                    var col = guna2DataGridView1.Columns[i];
+
+                    // If column is for images, set zoom layout
+                    if (col.ValueType == typeof(byte[]) || col is DataGridViewImageColumn ||
+                        col.Name.ToLower().Contains("image") || col.Name.ToLower().Contains("photo"))
+                    {
+                        if (!(col is DataGridViewImageColumn))
+                        {
+                            var imgCol = new DataGridViewImageColumn
+                            {
+                                Name = col.Name,
+                                HeaderText = col.HeaderText,
+                                DataPropertyName = col.DataPropertyName,
+                                ImageLayout = DataGridViewImageCellLayout.Zoom,
+                                Width = 120,
+                                DefaultCellStyle = { NullValue = null }
+                            };
+                            int position = col.DisplayIndex;
+                            guna2DataGridView1.Columns.RemoveAt(i);
+                            guna2DataGridView1.Columns.Insert(position, imgCol);
+                            col = imgCol;
+                        }
+                        else
+                        {
+                            ((DataGridViewImageColumn)col).ImageLayout = DataGridViewImageCellLayout.Zoom;
+                            col.Width = Math.Max(col.Width, 120);
+                        }
+
+                        guna2DataGridView1.RowTemplate.Height = Math.Max(guna2DataGridView1.RowTemplate.Height, 120);
+                    }
+                    else
+                    {
+                        // Text column autosizing
+                        col.AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+                        if (col.Width < 100) col.Width = 120;
+                    }
+                }
+
+                // Set grid interaction settings
+                guna2DataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+                guna2DataGridView1.MultiSelect = false;
+                guna2DataGridView1.ReadOnly = true;
+                guna2DataGridView1.AllowUserToAddRows = false;
+                guna2DataGridView1.RowHeadersVisible = false;
+                guna2DataGridView1.AllowUserToResizeRows = true;
+                guna2DataGridView1.AllowUserToResizeColumns = true;
+                guna2DataGridView1.AutoGenerateColumns = true;
+            }
+        }
+        catch (SqlException ex)
+        {
+            MessageBox.Show($"Database error: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error loading data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    // Search patients by ID or Firstname
+    private void guna2TextBox1_TextChanged(object sender, EventArgs e)
+    {
+        string search = guna2TextBox1.Text.Trim();
+
+        if (guna2DataGridView1.DataSource is DataTable dt)
+        {
+            if (string.IsNullOrEmpty(search))
+            {
+                dt.DefaultView.RowFilter = string.Empty;
+            }
+            else
+            {
+                string safe = search.Replace("'", "''");
+
+                if (int.TryParse(search, out int idValue))
+                {
+                    dt.DefaultView.RowFilter = $"Convert(Id, 'System.String') LIKE '%{idValue}%' OR Firstname LIKE '%{safe}%'";
+                }
+                else
+                {
+                    dt.DefaultView.RowFilter = $"Firstname LIKE '%{safe}%'";
+                }
+            }
+        }
+    }
+
+    // Logout confirmation
+    private void guna2Button5_Click(object sender, EventArgs e)
+    {
+        Guna2MessageDialog dialog = new Guna2MessageDialog();
+        dialog.Caption = "WARNING";
+        dialog.Text = "Are you sure you want to Logout?";
+        dialog.Style = MessageDialogStyle.Dark;
+        dialog.Icon = MessageDialogIcon.Warning;
+        dialog.Buttons = MessageDialogButtons.YesNo;
+        dialog.Parent = this;
+
+        DialogResult result = dialog.Show();
+        if (result == DialogResult.Yes)
+        {
+            Form2 login = new Form2();
+            login.Show();
+            this.Close();
+        }
+    }
+
+    // Exit confirmation when clicking label
+    private void label7_Click(object sender, EventArgs e)
+    {
+        Guna2MessageDialog dialog = new Guna2MessageDialog();
+        dialog.Caption = "WARNING";
+        dialog.Text = "Are you sure you want to exit the application?";
+        dialog.Style = MessageDialogStyle.Dark;
+        dialog.Icon = MessageDialogIcon.Warning;
+        dialog.Buttons = MessageDialogButtons.YesNo;
+        dialog.Parent = this;
+
+        DialogResult result = dialog.Show();
+        if (result == DialogResult.Yes)
+        {
+            Application.Exit();
+        }
+    }
+
+    // Minimize the entire application
+    private void label8_Click(object sender, EventArgs e)
+    {
+        foreach (Form f in Application.OpenForms)
+        {
+            f.WindowState = FormWindowState.Minimized;
+        }
+    }
+
+    // Navigate to Home form
+    private void guna2Button1_Click(object sender, EventArgs e)
+    {
+        Form12 home = new Form12(currentUsername);
+        home.Show();
+        this.Close();
+    }
+
+    // Navigate to next form (Form14)
+    private void guna2Button4_Click(object sender, EventArgs e)
+    {
+        Form14 next = new Form14(currentUsername);
+        next.Show();
+        this.Close();
+    }
+
+    private void guna2DataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
+    {
+        // Reserved for future click actions on data grid cells
+    }
+}
+```
+
+}
