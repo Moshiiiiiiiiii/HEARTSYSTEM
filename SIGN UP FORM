@@ -1,0 +1,207 @@
+using BCrypt.Net; // (Imported but not used yet — for password hashing)
+using Guna.UI2.WinForms; // Guna UI components and dialogs
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient; // For database connections
+using System.Linq;
+using System.Security.Cryptography; // For secure random recovery code generation
+using System.Text;
+using System.Windows.Forms;
+
+namespace H.E.A.R.Tv2._0
+{
+    public partial class Form9 : Form
+    {
+        public Form9()
+        {
+            // Enable double buffering for smoother UI rendering
+            this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+            this.UpdateStyles();
+
+            InitializeComponent(); // Initialize form components (textboxes, buttons, etc.)
+        }
+
+        // 🔹 REGISTER BUTTON CLICK EVENT
+        private void guna2Button2_Click(object sender, EventArgs e)
+        {
+            // Get user inputs
+            string username = guna2TextBox1.Text.Trim();
+            string password = guna2TextBox3.Text.Trim();
+
+            // Check if either field is empty
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            {
+                // Show warning message using Guna2 dialog
+                Guna2MessageDialog dialog = new Guna2MessageDialog();
+                dialog.Caption = "WARNING";
+                dialog.Text = "Please enter a username and password.";
+                dialog.Style = MessageDialogStyle.Dark;
+                dialog.Icon = MessageDialogIcon.Warning;
+                dialog.Buttons = MessageDialogButtons.OK;
+                dialog.Parent = this;
+                dialog.Show();
+                return; // Stop registration process
+            }
+
+            // Generate a unique 12-character recovery code for the user
+            string recoveryCode = GenerateRecoveryCode();
+
+            try
+            {
+                // Connect to the local SQL Server database
+                using (SqlConnection conn = new SqlConnection(
+                    @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\H.E.A.R.Tv2.0\Database\Login.mdf;Integrated Security=True;Connect Timeout=30;"))
+                {
+                    conn.Open(); // Open the database connection
+
+                    // Check if username already exists
+                    string checkQuery = "SELECT COUNT(*) FROM Users WHERE Username = @Username";
+                    using (SqlCommand checkCmd = new SqlCommand(checkQuery, conn))
+                    {
+                        checkCmd.Parameters.AddWithValue("@Username", username);
+                        int existingCount = (int)checkCmd.ExecuteScalar(); // Count results
+
+                        if (existingCount > 0)
+                        {
+                            // Username already used
+                            Guna2MessageDialog dialog1 = new Guna2MessageDialog();
+                            dialog1.Caption = "Already Used";
+                            dialog1.Text = "Username already exists! Please choose another one.";
+                            dialog1.Style = MessageDialogStyle.Dark;
+                            dialog1.Icon = MessageDialogIcon.Warning;
+                            dialog1.Buttons = MessageDialogButtons.OK;
+                            dialog1.Parent = this;
+                            dialog1.Show();
+                            return; // Stop registration
+                        }
+
+                        // Insert the new user into the Users table
+                        string insertUserQuery = @"
+                            INSERT INTO Users (Username, Password, Created_Date, Status, Role) 
+                            VALUES (@Username, @Password, @CreatedDate, @Status, @Role)";
+
+                        using (SqlCommand cmdUser = new SqlCommand(insertUserQuery, conn))
+                        {
+                            cmdUser.Parameters.AddWithValue("@Username", username);
+                            cmdUser.Parameters.AddWithValue("@Password", password); // (Note: Not hashed yet)
+                            cmdUser.Parameters.AddWithValue("@CreatedDate", DateTime.Now);
+                            cmdUser.Parameters.AddWithValue("@Status", "Active");
+                            cmdUser.Parameters.AddWithValue("@Role", "User");
+                            cmdUser.ExecuteNonQuery(); // Execute the insert command
+                        }
+
+                        // Get the new user's ID (for linking with recovery code)
+                        string getUserIdQuery = "SELECT User_Id FROM Users WHERE Username = @Username";
+                        int userId;
+                        using (SqlCommand cmdGetId = new SqlCommand(getUserIdQuery, conn))
+                        {
+                            cmdGetId.Parameters.AddWithValue("@Username", username);
+                            userId = Convert.ToInt32(cmdGetId.ExecuteScalar());
+                        }
+
+                        // Insert the generated recovery code into RecoveryCodes table
+                        string insertRecoveryQuery = @"
+                            INSERT INTO RecoveryCodes (User_Id, Recovery_Code, CreatedAt) 
+                            VALUES (@UserId, @Code, @CreatedAt)";
+                        using (SqlCommand cmdRecovery = new SqlCommand(insertRecoveryQuery, conn))
+                        {
+                            cmdRecovery.Parameters.AddWithValue("@UserId", userId);
+                            cmdRecovery.Parameters.AddWithValue("@Code", recoveryCode);
+                            cmdRecovery.Parameters.AddWithValue("@CreatedAt", DateTime.Now);
+                            cmdRecovery.ExecuteNonQuery();
+                        }
+
+                        // Show success message with recovery code
+                        Guna2MessageDialog dialog = new Guna2MessageDialog();
+                        dialog.Caption = "Created Successfully :)";
+                        dialog.Text = $"Account created successfully!\n\nYour recovery code is:\n\n{recoveryCode}\n\nPlease save it safely.";
+                        dialog.Style = MessageDialogStyle.Dark;
+                        dialog.Icon = MessageDialogIcon.Information;
+                        dialog.Buttons = MessageDialogButtons.OK;
+                        dialog.Parent = this;
+                        dialog.Show();
+
+                        // Clear fields after success
+                        guna2TextBox1.Clear();
+                        guna2TextBox3.Clear();
+
+                        // Redirect to Login Form (Form2)
+                        Form2 next = new Form2();
+                        next.Show();
+                        this.Hide();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Catch any database errors and display them
+                MessageBox.Show("Database error: " + ex.Message);
+            }
+        }
+
+        // 🔹 FUNCTION: Generates a secure random recovery code (e.g., ABCD-EFGH-IJKL)
+        private string GenerateRecoveryCode()
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; // Allowed characters
+            StringBuilder code = new StringBuilder();
+
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+            {
+                byte[] buffer = new byte[1];
+                for (int i = 0; i < 12; i++) // Generate 12 random characters
+                {
+                    rng.GetBytes(buffer);
+                    int index = buffer[0] % chars.Length;
+                    code.Append(chars[index]);
+                }
+            }
+
+            // Format the 12 characters as XXXX-XXXX-XXXX
+            return string.Join("-", Enumerable.Range(0, 3)
+                .Select(i => code.ToString().Substring(i * 4, 4)));
+        }
+
+        // 🔹 FORM LOAD EVENT
+        private void Form9_Load(object sender, EventArgs e)
+        {
+            // Currently empty — can be used for initializing controls
+        }
+
+        // 🔹 VALIDATION: Username textbox changed
+        private void guna2TextBox1_TextChanged(object sender, EventArgs e)
+        {
+            // If username box is empty, show an error using ErrorProvider
+            if (guna2TextBox1.TextLength == null)
+            {
+                errorProvider1.SetError(guna2TextBox1, "");
+            }
+            else
+            {
+                errorProvider1.SetError(guna2TextBox1, "This Field Is Required");
+            }
+        }
+
+        // 🔹 VALIDATION: Password textbox changed
+        private void guna2TextBox3_TextChanged(object sender, EventArgs e)
+        {
+            // If password box is empty, show an error using ErrorProvider
+            if (guna2TextBox3.TextLength == null)
+            {
+                errorProvider2.SetError(guna2TextBox3, "");
+            }
+            else
+            {
+                errorProvider2.SetError(guna2TextBox3, "This Field Is Required");
+            }
+        }
+
+        // 🔹 LINK: Go back to Login Form (Form2)
+        private void linkLabel2_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            Form2 back = new Form2();
+            back.Show();
+            this.Close(); // Close current registration form
+        }
+    }
+}
