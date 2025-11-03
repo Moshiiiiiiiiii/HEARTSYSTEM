@@ -1,0 +1,485 @@
+using BCrypt.Net;
+using Guna.UI2.WinForms;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Data.SqlClient;
+using System.Drawing;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading.Tasks;
+using System.Web.UI.WebControls;
+using System.Windows.Forms;
+
+namespace H.E.A.R.Tv2._0
+{
+public partial class Form10 : Form
+{
+// Variables for SQL commands and connection
+private SqlCommand cmds;
+private SqlConnection con = new SqlConnection();
+
+```
+    public Form10()
+    {
+        // Enable smooth form display
+        this.DoubleBuffered = true;
+        this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+        this.UpdateStyles();
+        InitializeComponent();
+    }
+
+    private void Form10_Load(object sender, EventArgs e)
+    {
+        // Connect to local database
+        con.ConnectionString = @"Data Source = (LocalDB)\MSSQLLocalDB; AttachDbFilename = C:\H.E.A.R.Tv2.0\Database\Login.mdf; Integrated Security = True; Connect Timeout = 30;";
+
+        // Load data when the form opens
+        LoadDataToGrid();
+        disp_data();
+        LoadUsers();
+        disp_data2();
+        LoadRecoveryCodes();
+    }
+
+    // Load users with Active and Inactive status
+    private void LoadUsers()
+    {
+        con.Open();
+        SqlDataAdapter daActive = new SqlDataAdapter("SELECT User_Id, Username,Password,Created_Date, Status FROM Users WHERE Status = 'Active'", con);
+        SqlDataAdapter daInactive = new SqlDataAdapter("SELECT User_Id, Username,Password,Created_Date, Status FROM Users WHERE Status = 'Inactive'", con);
+
+        DataTable dtActive = new DataTable();
+        DataTable dtInactive = new DataTable();
+
+        daActive.Fill(dtActive);
+        daInactive.Fill(dtInactive);
+
+        guna2DataGridView1.DataSource = dtActive;
+        guna2DataGridView2.DataSource = dtInactive;
+
+        con.Close();
+    }
+
+    // Load recovery codes for users
+    private void LoadRecoveryCodes()
+    {
+        con.Open();
+        SqlDataAdapter RecoveryCodes = new SqlDataAdapter("SELECT Code_Id,User_Id,Recovery_Code,CreatedAt From RecoveryCodes", con);
+        DataTable Codes = new DataTable();
+        RecoveryCodes.Fill(Codes);
+        guna2DataGridView3.DataSource = Codes;
+        con.Close();
+    }
+
+    // Display user data to the first DataGridView
+    private void disp_data()
+    {
+        if (string.IsNullOrWhiteSpace(con.ConnectionString))
+        {
+            MessageBox.Show("Connection string is not set.", "Configuration Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            // Open and read data from Users table
+            using (var conn = new SqlConnection(con.ConnectionString))
+            using (var cmd = conn.CreateCommand())
+            using (var da = new SqlDataAdapter(cmd))
+            {
+                cmd.CommandType = CommandType.Text;
+                cmd.CommandText = "SELECT * FROM Users";
+                var dt = new DataTable();
+                conn.Open();
+                da.Fill(dt);
+
+                guna2DataGridView1.DataSource = dt;
+
+                // Adjust table appearance
+                guna2DataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+                guna2DataGridView1.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCellsExceptHeaders;
+                guna2DataGridView1.RowTemplate.Height = 120;
+                guna2DataGridView1.RowTemplate.MinimumHeight = 80;
+                guna2DataGridView1.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+
+                // Adjust each column (size, layout)
+                for (int i = 0; i < guna2DataGridView1.Columns.Count; i++)
+                {
+                    var col = guna2DataGridView1.Columns[i];
+                    if (col.ValueType == typeof(byte[]) || col is DataGridViewImageColumn)
+                    {
+                        // Image columns layout
+                        ((DataGridViewImageColumn)col).ImageLayout = DataGridViewImageCellLayout.Zoom;
+                        col.Width = Math.Max(col.Width, 120);
+                    }
+                    else
+                    {
+                        // Text columns
+                        col.AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+                        if (col.Width < 100) col.Width = 120;
+                    }
+                }
+
+                // Table behavior settings
+                guna2DataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+                guna2DataGridView1.MultiSelect = false;
+                guna2DataGridView1.ReadOnly = true;
+                guna2DataGridView1.AllowUserToAddRows = false;
+                guna2DataGridView1.RowHeadersVisible = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error loading data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    // Format and display Inactive users
+    private void disp_data2()
+    {
+        guna2DataGridView2.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        guna2DataGridView2.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCellsExceptHeaders;
+        guna2DataGridView2.RowTemplate.Height = 120;
+        guna2DataGridView2.RowTemplate.MinimumHeight = 80;
+        guna2DataGridView2.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+
+        for (int i = 0; i < guna2DataGridView2.Columns.Count; i++)
+        {
+            var col = guna2DataGridView2.Columns[i];
+            col.AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            if (col.Width < 100) col.Width = 120;
+        }
+
+        guna2DataGridView2.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        guna2DataGridView2.MultiSelect = false;
+        guna2DataGridView2.ReadOnly = true;
+        guna2DataGridView2.AllowUserToAddRows = false;
+        guna2DataGridView2.RowHeadersVisible = false;
+    }
+
+    // Load recovery codes data into grid
+    private void LoadDataToGrid()
+    {
+        try
+        {
+            con.Open();
+            string query = "SELECT * FROM RecoveryCodes";
+            SqlDataAdapter da = new SqlDataAdapter(query, con);
+            DataTable dt = new DataTable();
+            da.Fill(dt);
+            guna2DataGridView3.DataSource = dt;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Error loading data: " + ex.Message);
+        }
+        finally
+        {
+            con.Close();
+        }
+    }
+
+    // Navigation buttons
+    private void guna2Button2_Click(object sender, EventArgs e)
+    {
+        Form4 patient = new Form4();
+        patient.Show();
+        this.Hide();
+    }
+
+    private void guna2Button1_Click(object sender, EventArgs e)
+    {
+        Form3 patient = new Form3();
+        patient.Show();
+        this.Hide();
+    }
+
+    // Activate user account
+    private void guna2Button6_Click(object sender, EventArgs e)
+    {
+        if (guna2DataGridView2.SelectedRows.Count > 0)
+        {
+            int userId = Convert.ToInt32(guna2DataGridView2.SelectedRows[0].Cells["User_Id"].Value);
+            UpdateStatus(userId, "Active");
+            MessageBox.Show("User activated successfully!");
+            LoadUsers();
+        }
+        else
+        {
+            MessageBox.Show("Select a user to activate.");
+        }
+    }
+
+    // Deactivate user account
+    private void guna2Button9_Click(object sender, EventArgs e)
+    {
+        if (guna2DataGridView1.SelectedRows.Count > 0)
+        {
+            int userId = Convert.ToInt32(guna2DataGridView1.SelectedRows[0].Cells["User_Id"].Value);
+            UpdateStatus(userId, "Inactive");
+            MessageBox.Show("User deactivated successfully!");
+            LoadUsers();
+        }
+        else
+        {
+            MessageBox.Show("Select a user to deactivate.");
+        }
+    }
+
+    // Delete user account and its recovery code
+    private void guna2Button7_Click(object sender, EventArgs e)
+    {
+        int userId = -1;
+        if (guna2DataGridView1.SelectedRows.Count > 0)
+            userId = Convert.ToInt32(guna2DataGridView1.SelectedRows[0].Cells["User_Id"].Value);
+        else if (guna2DataGridView2.SelectedRows.Count > 0)
+            userId = Convert.ToInt32(guna2DataGridView2.SelectedRows[0].Cells["User_Id"].Value);
+
+        if (userId != -1)
+        {
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "Confirm Delete";
+            dialog.Text = "Are you sure you want to delete this account?";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Question;
+            dialog.Buttons = MessageDialogButtons.YesNo;
+            dialog.Parent = this;
+            DialogResult result = dialog.Show();
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    con.Open();
+                    SqlCommand cmdRecovery = new SqlCommand("DELETE FROM RecoveryCodes WHERE User_Id = @uid", con);
+                    cmdRecovery.Parameters.AddWithValue("@uid", userId);
+                    cmdRecovery.ExecuteNonQuery();
+
+                    SqlCommand cmdUser = new SqlCommand("DELETE FROM Users WHERE User_Id = @uid", con);
+                    cmdUser.Parameters.AddWithValue("@uid", userId);
+                    cmdUser.ExecuteNonQuery();
+                    con.Close();
+
+                    MessageBox.Show("User deleted successfully!");
+                    LoadUsers();
+                    LoadRecoveryCodes();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Error deleting user: " + ex.Message);
+                    con.Close();
+                }
+            }
+        }
+        else
+        {
+            MessageBox.Show("Select a user to delete.");
+        }
+    }
+
+    // Update user status in database
+    private void UpdateStatus(int userId, string status)
+    {
+        con.Open();
+        SqlCommand cmd = new SqlCommand("UPDATE Users SET Status = @status WHERE User_Id = @id", con);
+        cmd.Parameters.AddWithValue("@status", status);
+        cmd.Parameters.AddWithValue("@id", userId);
+        cmd.ExecuteNonQuery();
+        con.Close();
+    }
+
+    // Exit confirmation
+    private void label7_Click(object sender, EventArgs e)
+    {
+        Guna2MessageDialog dialog = new Guna2MessageDialog();
+        dialog.Caption = "WARNING";
+        dialog.Text = "Are you sure you want to exit the application?";
+        dialog.Style = MessageDialogStyle.Dark;
+        dialog.Icon = MessageDialogIcon.Warning;
+        dialog.Buttons = MessageDialogButtons.YesNo;
+        dialog.Parent = this;
+        DialogResult result = dialog.Show();
+        if (result == DialogResult.Yes)
+        {
+            Application.Exit();
+        }
+    }
+
+    // Minimize the window
+    private void label8_Click(object sender, EventArgs e)
+    {
+        foreach (Form f in Application.OpenForms)
+        {
+            f.WindowState = FormWindowState.Minimized;
+        }
+    }
+
+    // Sidebar animation (expand/collapse)
+    private void guna2PictureBox1_Click(object sender, EventArgs e)
+    {
+        if (guna2GradientPanel1.Width == 266)
+        {
+            guna2GradientPanel1.Width = 87; // Collapse sidebar
+        }
+        else
+        {
+            guna2GradientPanel1.Width = 266; // Expand sidebar
+        }
+    }
+
+    // Logout confirmation
+    private void guna2Button5_Click(object sender, EventArgs e)
+    {
+        Guna2MessageDialog dialog = new Guna2MessageDialog();
+        dialog.Caption = "WARNING";
+        dialog.Text = "Are you sure you want to Logout?";
+        dialog.Style = MessageDialogStyle.Dark;
+        dialog.Icon = MessageDialogIcon.Warning;
+        dialog.Buttons = MessageDialogButtons.YesNo;
+        dialog.Parent = this;
+
+        DialogResult result = dialog.Show();
+        if (result == DialogResult.Yes)
+        {
+            Form2 logout = new Form2();
+            logout.Show();
+            this.Close();
+        }
+    }
+
+    // Go to another form
+    private void guna2Button4_Click(object sender, EventArgs e)
+    {
+        Form13 next = new Form13();
+        next.Show();
+        this.Close();
+    }
+
+    // Create new admin account with auto-generated recovery code
+    private void guna2Button8_Click(object sender, EventArgs e)
+    {
+        string username = guna2TextBox2.Text.Trim();
+        string password = guna2TextBox3.Text.Trim();
+
+        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+        {
+            Guna2MessageDialog dialog = new Guna2MessageDialog();
+            dialog.Caption = "WARNING";
+            dialog.Text = "Please enter a username and password.";
+            dialog.Style = MessageDialogStyle.Dark;
+            dialog.Icon = MessageDialogIcon.Warning;
+            dialog.Buttons = MessageDialogButtons.OK;
+            dialog.Parent = this;
+            dialog.Show();
+            return;
+        }
+
+        string recoveryCode = GenerateRecoveryCode();
+
+        try
+        {
+            using (SqlConnection conn = new SqlConnection(
+                @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\Users\Administrator\OneDrive\Documents\Login.mdf;Integrated Security=True;Connect Timeout=30"))
+            {
+                conn.Open();
+
+                // Check if username already exists
+                string checkQuery = "SELECT COUNT(*) FROM Users WHERE Username = @Username";
+                using (SqlCommand checkCmd = new SqlCommand(checkQuery, conn))
+                {
+                    checkCmd.Parameters.AddWithValue("@Username", username);
+                    int existingCount = (int)checkCmd.ExecuteScalar();
+                    if (existingCount > 0)
+                    {
+                        MessageBox.Show("Username already exists!");
+                        return;
+                    }
+                }
+
+                // Insert user
+                string insertUserQuery = "INSERT INTO Users (Username, Password, Created_Date, Status,Role) VALUES (@Username, @Password, @CreatedDate, @Status,@Role)";
+                using (SqlCommand cmdUser = new SqlCommand(insertUserQuery, conn))
+                {
+                    cmdUser.Parameters.AddWithValue("@Username", username);
+                    cmdUser.Parameters.AddWithValue("@Password", password);
+                    cmdUser.Parameters.AddWithValue("@CreatedDate", DateTime.Now);
+                    cmdUser.Parameters.AddWithValue("@Status", "Active");
+                    cmdUser.Parameters.AddWithValue("@Role", "Admin");
+                    cmdUser.ExecuteNonQuery();
+                }
+
+                // Get new user ID
+                string getUserIdQuery = "SELECT User_Id FROM Users WHERE Username = @Username";
+                int userId;
+                using (SqlCommand cmdGetId = new SqlCommand(getUserIdQuery, conn))
+                {
+                    cmdGetId.Parameters.AddWithValue("@Username", username);
+                    userId = Convert.ToInt32(cmdGetId.ExecuteScalar());
+                }
+
+                // Insert recovery code
+                string insertRecoveryQuery = "INSERT INTO RecoveryCodes (User_Id, Recovery_Code, CreatedAt) VALUES (@UserId, @Code, @CreatedAt)";
+                using (SqlCommand cmdRecovery = new SqlCommand(insertRecoveryQuery, conn))
+                {
+                    cmdRecovery.Parameters.AddWithValue("@UserId", userId);
+                    cmdRecovery.Parameters.AddWithValue("@Code", recoveryCode);
+                    cmdRecovery.Parameters.AddWithValue("@CreatedAt", DateTime.Now);
+                    cmdRecovery.ExecuteNonQuery();
+                }
+
+                MessageBox.Show($"Account created successfully!\nYour recovery code: {recoveryCode}");
+                guna2TextBox1.Clear();
+                guna2TextBox3.Clear();
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Database error: " + ex.Message);
+        }
+    }
+
+    // Generate a random recovery code (e.g., XXXX-XXXX-XXXX)
+    private string GenerateRecoveryCode()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        StringBuilder code = new StringBuilder();
+        using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+        {
+            byte[] buffer = new byte[1];
+            for (int i = 0; i < 12; i++)
+            {
+                rng.GetBytes(buffer);
+                int index = buffer[0] % chars.Length;
+                code.Append(chars[index]);
+            }
+        }
+        return string.Join("-", Enumerable.Range(0, 3).Select(i => code.ToString().Substring(i * 4, 4)));
+    }
+
+    // Search filter for users
+    private void guna2TextBox1_TextChanged(object sender, EventArgs e)
+    {
+        string search = guna2TextBox1.Text.Trim();
+        if (guna2DataGridView1.DataSource is DataTable dt)
+        {
+            if (string.IsNullOrEmpty(search))
+            {
+                dt.DefaultView.RowFilter = string.Empty;
+            }
+            else
+            {
+                string safe = search.Replace("'", "''");
+                if (int.TryParse(search, out int idValue))
+                    dt.DefaultView.RowFilter = $"Convert(User_Id, 'System.String') LIKE '%{idValue}%' OR Username LIKE '%{safe}%'";
+                else
+                    dt.DefaultView.RowFilter = $"Username LIKE '%{safe}%'";
+            }
+        }
+    }
+}
+```
+
+}
